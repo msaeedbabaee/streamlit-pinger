@@ -1,17 +1,35 @@
-import requests
+name: Keep-Alive Cron Job
 
-def ping_urls():
-    with open("urls.txt", "r") as file:
-        urls = [line.strip() for line in file if line.strip()]
-    
-    print(f"Total apps to ping: {len(urls)}")
-    
-    for url in urls:
-        try:
-            response = requests.get(url, timeout=15)
-            print(f"[SUCCESS] Pinged: {url} | Status: {response.status_code}")
-        except Exception as e:
-            print(f"[FAILED] Could not ping {url}: {e}")
+on:
+  schedule:
+    # Every 4 hours. Streamlit Community Cloud's exact inactivity threshold
+    # isn't published and has been lowered over time, and GitHub's cron
+    # scheduler is best-effort (runs can be delayed under load), so this
+    # leaves a safety margin rather than cutting it close.
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # allows manual runs from the Actions tab
 
-if __name__ == "__main__":
-    ping_urls()
+jobs:
+  ping-job:
+    runs-on: ubuntu-latest
+    # Cold starts can take a couple of minutes per app; with several apps in
+    # urls.txt the job needs more headroom than the previous 6-minute default.
+    timeout-minutes: 30
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Chromium (headless browser)
+        run: playwright install --with-deps chromium
+
+      - name: Run ping script
+        run: python ping.py
